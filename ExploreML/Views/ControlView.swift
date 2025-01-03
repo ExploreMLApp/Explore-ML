@@ -26,8 +26,7 @@ struct ControlView: View {
     
     @State var disclosedModel = true
     @State private var showFilePicker = false
-    
-    
+
     var body: some View {
         VStack(alignment: .leading) {
             ScrollView {
@@ -137,7 +136,9 @@ struct ControlView: View {
                         .controlSize(.large)
                         .frame(maxWidth: .infinity)
                         .cornerRadius(5)
-                        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.mlpackage, .mlmodelc], allowsMultipleSelection: false) { result in
+                        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [
+                            .mlpackage, .mlmodelc, .mlmodel
+                        ], allowsMultipleSelection: false) { result in
                             switch result {
                             case .success(let urls):
                                 modelURL = urls.first
@@ -163,4 +164,5 @@ struct ControlView: View {
 private extension UTType {
     static let mlpackage = UTType(filenameExtension: "mlpackage", conformingTo: .item)!
     static let mlmodelc = UTType(filenameExtension: "mlmodelc", conformingTo: .item)!
+    static let mlmodel = UTType(filenameExtension: "mlmodel", conformingTo: .item)!
 }
