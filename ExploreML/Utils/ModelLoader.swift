@@ -6,46 +6,78 @@
 //
 
 import CoreML
-import Path
+import Foundation
+import SwiftUI
 import Models
 
+enum ModelError: Error {
+    case modelNotFound(String)
+    case invalidModelURL
+    case loadError(Error)
+}
+
 class ModelLoader {
-    static let models = Path.applicationSupport / "hf-compiled-transformers"
-    static let lastCompiledModel = models / "last-model.mlmodelc"
-        
-    static func load(url: URL?) async throws -> LanguageModel {
-        func clearModels() throws {
-            try models.delete()
-            try ModelLoader.models.mkdir(.p)
+    // Singleton instance for shared access
+    static let shared = ModelLoader()
+    
+    // Cache to store loaded models
+    private var modelCache: [String: LanguageModel] = [:]
+    
+    private init() {}
+    
+    /// Loads a CoreML model from the app bundle
+    /// - Parameter url: The url of the model
+    /// - Returns: The loaded MLModel
+    /// - Throws: ModelError if loading fails
+    func loadModel(url: URL?) async throws -> LanguageModel {
+        // Check cache first
+        if let fileName = url?.lastPathComponent, let cachedModel = modelCache[fileName] {
+            return cachedModel
         }
-            
+        
         if let url = url, url.startAccessingSecurityScopedResource() {
             defer {
                 url.stopAccessingSecurityScopedResource()
             }
-            let compiledPath = models / url.deletingPathExtension().appendingPathExtension("mlmodelc").lastPathComponent
-            if url.pathExtension == "mlmodelc" {
-                // _copy_ to the models folder
-                try clearModels()
-                try Path(url: url)?.copy(to: compiledPath, overwrite: true)
-            } else {
-                // Compile and _move_
-                print("Compiling model \(url)")
-                let compiledURL = try await MLModel.compileModel(at: url)
-                try clearModels()
-                try Path(url: compiledURL)?.move(to: compiledPath, overwrite: true)
-            }
-
-            // Create symlink (alternative: store name in UserDefaults)
-            try compiledPath.symlink(as: lastCompiledModel)
-        }
         
-        // Load last model used (or the one we just compiled)
-        let lastURL = try lastCompiledModel.readlink().url
-        return try LanguageModel.loadCompiled(url: lastURL, computeUnits: .cpuAndGPU)
+            let model: LanguageModel?
+            
+            do {
+                if url.pathExtension == "mlmodelc" {
+                    model = try LanguageModel.loadCompiled(url: url)
+                } else {
+                    // Compile model URL
+                    guard let compiledModelURL = try? await MLModel.compileModel(at: url) else {
+                        throw ModelError.invalidModelURL
+                    }
+                    let precompiled = try MLModel(contentsOf: compiledModelURL)
+                    model = LanguageModel(model: precompiled)
+                }
+            
+                // Cache the loaded model
+                modelCache[url.lastPathComponent] = model
+                
+                return model!
+            } catch {
+                throw ModelError.loadError(error)
+            }
+        } else {
+            throw ModelError.invalidModelURL
+        }
+    }
+    
+    /// Removes a model from the cache
+    /// - Parameter name: Name of the model to remove
+    func clearModelFromCache(named name: String) {
+        modelCache.removeValue(forKey: name)
+    }
+    
+    /// Clears all models from the cache
+    func clearAllModelsFromCache() {
+        modelCache.removeAll()
     }
 }
 
 import Combine
 
-extension LanguageModel: ObservableObject {}
+// extension LanguageModel: ObservableObject {}

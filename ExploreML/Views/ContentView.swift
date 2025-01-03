@@ -6,6 +6,7 @@
 //  Based on code by Cyril Zakka from https://github.com/cyrilzakka/pen
 //
 
+import CoreML
 import SwiftUI
 import Generation
 import Models
@@ -42,7 +43,7 @@ struct ContentView: View {
         status = .loading
         Task.init {
             do {
-                languageModel = try await ModelLoader.load(url: modelURL)
+                languageModel = try await ModelLoader.shared.loadModel(url: modelURL)
                 if let config = languageModel?.defaultGenerationConfig {
                     let maxNewTokens = self.config.maxNewTokens
                     self.config = config
